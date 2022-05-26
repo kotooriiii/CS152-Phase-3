@@ -1,0 +1,62 @@
+program -> functions
+ 
+functions -> function functions_spec | (epsilon)
+functions_spec -> functions 
+function -> FUNCTION ident SEMICOLON BEGIN_PARAMS declarations END_PARAMS BEGIN_LOCALS declarations END_LOCALS BEGIN_BODY statements END_BODY
+
+declarations -> declaration SEMICOLON declarations_spec | (epsilon)
+declarations_spec -> declarations 
+
+statements -> statement SEMICOLON statementsEnding 
+statementsEnding -> statements | (epsilon)
+
+declaration -> identifiers COLON INTEGER | identifiers COLON ARRAY L_SQUARE_BRACKET number R_SQUARE_BRACKET OF INTEGER | identifiers COLON ENUM L_PAREN identifiers R_PAREN
+
+identifiers -> ident COMMA identifiers | ident
+
+statement -> svar | sif | swhile | sdo | sread | swrite | scontinue | sreturn 
+svar -> var ASSIGN expression
+sif -> IF bool_expr THEN statements ENDIF | IF bool_expr THEN statements ELSE statements ENDIF
+swhile -> WHILE bool_expr BEGINLOOP statements ENDLOOP
+sdo -> DO BEGINLOOP statements ENDLOOP WHILE bool_expr
+sread -> READ vars
+vars -> var | var COMMA vars
+swrite -> WRITE vars
+scontinue -> CONTINUE
+sreturn -> RETURN expression
+
+bool_expr -> relation_and_expr bool_exprs
+bool_exprs-> OR relation_and_expr bool_exprs | (epsilon)
+
+relation_and_expr -> relation_expr relation_and_exprs
+relation_and_exprs-> AND relation_expr relation_and_exprs | (epsilon)
+
+relation_expr -> nots relation_expr_ending
+relation_expr_ending -> expression comp expression | TRUE | FALSE | L_PAREN bool_expr R_PAREN
+nots -> (epsilon) |  NOT
+
+comp -> EQ | NEQ | LT | GT | LTE | GTE
+
+expression -> multiplicative_expr expression_operators
+
+expression_operators -> ADD multiplicative_expr expression_operators | SUB multiplicative_expr expression_operators | (epsilon)
+
+multiplicative_expr -> term multiplicative_operators
+
+multiplicative_operators -> MOD term multiplicative_operators | DIV term multiplicative_operators | MULT term multiplicative_operators |  (epsilon) 
+
+term -> term_spec  | subs number | subs L_PAREN expression R_PAREN 
+
+term_spec -> subs ident var_or_bottom 
+
+var_or_bottom -> var_spec | L_PAREN expressions R_PAREN
+
+subs -> SUB | (epsilon)
+
+expressions -> expression COMMA expressions | expression | (epsilon)
+
+var -> ident var_spec
+var_spec -> L_SQUARE_BRACKET expression R_SQUARE_BRACKET | (epsilon)
+
+ident -> IDENT
+number -> NUMBER
