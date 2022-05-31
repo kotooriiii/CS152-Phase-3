@@ -19,7 +19,12 @@ extern int yylex();
 extern int currLine;
 extern int currPos; 
 
-enum SYMBOL_TYPE {INT, ARR, FUNC};
+bool isError = 0;
+
+const char* reservedWordsInit[] = {"function", "beginparams", "endparams", "beginlocals", "endlocals", "beginbody", "endbody", "integer", "array", "enum", "of", "if", "then", "endif", "else", "for", "while", "do", "beginloop", "endloop", "continue", "read", "write", "and", "or", "not", "true", "false", "return"};
+vector<string> reservedWords(reservedWordsInit, reservedWordsInit + sizeof(reservedWordsInit)/sizeof(reservedWordsInit[0]));
+
+enum SYMBOL_TYPE {INT, ARR, FUNC, IENUM};
 
 string getSymbolTypeName(SYMBOL_TYPE type)
 {
@@ -35,6 +40,10 @@ string getSymbolTypeName(SYMBOL_TYPE type)
   {
     return "FUNC";
   }
+  else if (type == IENUM)
+  {
+    return "ENUM";
+  }
   else
   {
     return "ERROR";
@@ -44,6 +53,7 @@ string getSymbolTypeName(SYMBOL_TYPE type)
 void yyerror(const char * errorMessage)
 {
 	printf("Error: On line %d, column %d: %s\n", currLine, currPos, errorMessage);
+  isError = 1;
 }
 
 struct Symbol 
@@ -154,22 +164,42 @@ void add_function_to_symbol_table(std::string &value) {
   }
   else
   {
-    Function f; 
-    f.name = value; 
-    symbol_table.push_back(f);
-    if(value == "main")
+    bool isFound = false;
+    for(int i=0; i < reservedWords.size(); i++) 
     {
-      if(mainExists == 1)
+      string s = reservedWords[i];
+      if (s == value) 
       {
-        mainDuplicateExists = 1;
+        isFound = true;
+        break;
       }
-      mainExists = 1;
+    }
+
+    if(isFound)
+    {
+      string error = "Function \"" + value + "\" is not allowed to be used because it is a reserved keyword.";
+      yyerror(error.c_str());
+    }
+    else
+    {
+      Function f; 
+      f.name = value; 
+      symbol_table.push_back(f);
+      if(value == "main")
+      {
+        if(mainExists == 1)
+        {
+          mainDuplicateExists = 1;
+        }
+        mainExists = 1;
+      }
     }
   }
 }
 
 
-void add_variable_to_symbol_table(std::string &name, int value, int size, SYMBOL_TYPE t) {
+void add_variable_to_symbol_table(std::string &name, int value, int size, SYMBOL_TYPE t) 
+{
   
   if(findSymbol(name))
   {
@@ -178,13 +208,33 @@ void add_variable_to_symbol_table(std::string &name, int value, int size, SYMBOL
   }
   else
   {
-    Symbol s;
-    s.name = name;
-    s.type = t;
-    s.value = value;
-    s.size = size;
-    Function *f = get_function();
-    f->declarations.push_back(s);
+
+    bool isFound = false;
+    for(int i=0; i < reservedWords.size(); i++) 
+    {
+      string s = reservedWords[i];
+      if (s == name) 
+      {
+        isFound = true;
+        break;
+      }
+    }
+
+    if(isFound)
+    {
+      string error = "Symbol \"" + name + "\" is not allowed to be used because it is a reserved keyword.";
+      yyerror(error.c_str());
+    }
+    else
+    {
+      Symbol s;
+      s.name = name;
+      s.type = t;
+      s.value = value;
+      s.size = size;
+      Function *f = get_function();
+      f->declarations.push_back(s);
+    } 
   }
 }
 
@@ -228,7 +278,6 @@ ostringstream outCode;
 
 stack<string> ands;
 stack<string> ors;
-
 
 %}
 
@@ -292,20 +341,20 @@ stack<string> ors;
 %% 
 /* write your rules here */
 program:                  functions
-                          {printf("program->functions\n");}
+                          {}
                           |
-                          error {yyerrok; yyclearin;}
+                          error {/*yyerrok; yyclearin;*/}
                           ;
 
 functions:                function functions_spec 
-                          {printf("functions->function functions_spec\n");}
+                          {}
                           |
                           /*epsilon*/
-                          {printf("functions->epsilon\n");}
+                          {}
                           ;
 
 functions_spec:           functions
-                          {printf("functions_spec->functions\n");}
+                          {}
                           ;
 
 function:                 FUNCTION ident 
@@ -335,17 +384,17 @@ function:                 FUNCTION ident
                           ;
 
 declarations:             declaration SEMICOLON declarations_spec
-                          {printf("declarations->declaration SEMICOLON declarations_spec\n");}
+                          {}
                           |
                           /*epsilon*/
-                          {printf("declarations->epsilon\n");}
+                          {}
                           ;
 
 declarations_spec:        declarations
-                          {printf("declarations_spec->declarations\n");}
+                          {}
 
 statements:               statement SEMICOLON statements
-                          {printf("statements->statement SEMICOLON statementsEnding\n");}
+                          {}
                           |
                           {}
                           ;
@@ -378,9 +427,27 @@ declaration:              identifiers COLON INTEGER
                             } 
                           }
                           |
-                          identifiers COLON ENUM L_PAREN identifiers R_PAREN
+                          identifiers COLON ENUM L_PAREN
                           {
-                            //todo FOR ENUMS!! printf("declaration->identifiers COLON ENUM L_PAREN identifiers R_PAREN\n");
+                            while(!identStack.empty())
+                            {
+                              string name = identStack.top();
+                              SYMBOL_TYPE type = IENUM;
+                              add_variable_to_symbol_table(name, 0, 0, type);
+                              inCode << ". " << name << endl;
+                              identStack.pop();
+                            } 
+                          }
+                          identifiers R_PAREN
+                          {
+                            while(!identStack.empty())
+                            {
+                              string name = identStack.top();
+                              SYMBOL_TYPE type = INT;
+                              add_variable_to_symbol_table(name, 0, 0, type);
+                              inCode << ". " << name << endl;
+                              identStack.pop();
+                            }   
                           }
                           ;
 
@@ -388,39 +455,39 @@ identifiers:              ident COMMA identifiers
                           {
                             identStack.push(string($1.name));
                             paramStack.push(string($1.name));
-                            printf("identifiers->ident COMMA identifiers\n");}
+                          }
                           |
                           ident
                           {
                             identStack.push(string($1.name));
                             paramStack.push(string($1.name));
-                            printf("identifiers->ident\n");
-                            }
+                            
+                          }
                           ;
 
 statement:                svar
-                          {printf("statement->svar\n");}
+                          {}
                           |
                           sif
-                          {printf("statement->sif\n");}
+                          {}
                           |
                           swhile
-                          {printf("statement->swhile\n");}
+                          {}
                           |
                           sdo
-                          {printf("statement->sdo\n");}
+                          {}
                           |
                           sread
-                          {printf("statement->sread\n");}
+                          {}
                           |
                           swrite
-                          {printf("statement->swrite\n");}
+                          {}
                           |
                           scontinue
-                          {printf("statement->scontinue\n");}
+                          {}
                           |
                           sreturn
-                          {printf("statement->sreturn\n");}
+                          {}
                           ;
 
 svar:                     var ASSIGN expression
@@ -624,7 +691,7 @@ bool_exprs:               OR relation_and_expr bool_exprs
                           }
                           |
                           /*epsilon*/
-                          {printf("bool_exprs->epsilon\n");}
+                          {}
                           ;
 
 relation_and_expr:        relation_expr relation_and_exprs
@@ -956,9 +1023,17 @@ ident:                    IDENT
                             $$.value = 42;
                             $$.type = 0;
                             char chars[100];
-                            sprintf(chars, "%d", $1);
                             strcpy($$.name, $1);
                             strcpy($$.ind, $$.name);
+                          }
+                          |
+                          //ERROR
+                          {
+
+                            string error = "Identifier not allowed to be used because it is a reserved keyword.";
+                            yyerror(error.c_str());
+              
+                            strcpy($$.name, "null");
                           }
                           ;
 
@@ -999,13 +1074,21 @@ int main(int argc, char ** argv)
   {
     if(mainDuplicateExists==1)
     {
-          yyerror("Error: Dupluicate main functions found.");
+          yyerror("Error: Duplicate main functions found.");
     }
   }
 
-  ofstream file;
-  file.open("out.mil");
-  file << outCode.str();
-  file.close();
+  if(!isError)
+  {
+    printf("The file \"%s\" was able to be compiled into out.mil successfully.\n", argv[1]);
+    ofstream file;
+    file.open("out.mil");
+    file << outCode.str();
+    file.close();
+  }
+  else
+  {
+    printf("The file \"%s\" produced errors.\n", argv[1]);
+  }
 	return 0;
 }
