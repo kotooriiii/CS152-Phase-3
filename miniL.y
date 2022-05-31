@@ -130,7 +130,7 @@ bool checkSymbolIsOfType(std::string &value, SYMBOL_TYPE assertType) {
       }
       else
       {
-        string error = "Symbol \"" + value + "\" is of type \"" + getSymbolTypeName(s->type) + ".";
+        string error = "Symbol \"" + value + "\" is of type \"" + getSymbolTypeName(s->type) + "\".";
         yyerror(error.c_str());
         return false;
       }
@@ -1023,6 +1023,7 @@ int main(int argc, char ** argv)
 		yyin = fopen(argv[1], "r");
 		if (yyin == NULL) 
     {
+      printf("File could not be read.\n");
 			yyin = stdin;
 		}
 	}
