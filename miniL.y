@@ -283,7 +283,7 @@ stack<string> ors;
 %type <attr> bool_expr relation_expr relation_and_expr relation_expr_ending expression mul_exp term var
 %type <attr> number ident
 %type <attr> swrite sread sreturn
-%type <identifierVal> nots comp
+%type <identifierVal> comp
 
 
 /* %start program */
@@ -344,15 +344,10 @@ declarations:             declaration SEMICOLON declarations_spec
 declarations_spec:        declarations
                           {printf("declarations_spec->declarations\n");}
 
-statements:               statement SEMICOLON statementsEnding
+statements:               statement SEMICOLON statements
                           {printf("statements->statement SEMICOLON statementsEnding\n");}
-                          ;
-
-statementsEnding:         statements 
-                          {printf("statementsEnding->statements\n");}
                           |
-                          /*epsilon*/
-                          {printf("statementsEnding->epsilon\n");}
+                          {}
                           ;
 
 declaration:              identifiers COLON INTEGER
@@ -444,49 +439,35 @@ svar:                     var ASSIGN expression
                           }
                           ;
 
-sif:                      IF bool_expr THEN
+sif:	                    IF bool_expr THEN 
                           {
-                            string start = makeLabel();
-                            string endif = makeLabel();
-                            label_vector.push_back(endif); 
-                            inCode << "?:= " << start << ", " << const_cast<char*>($2.name) << endl;
-                            inCode << ":= " << endif << endl;
-                            inCode << ": " << start << endl;
-                          }
-                          statements ENDIF
+                          string start = makeLabel();
+                          string endif = makeLabel();
+                          label_vector.push_back(endif); 
+                          inCode << "?:= " << start << ", " << const_cast<char*>($2.name) << endl;
+                          inCode << ":= " << endif << endl;
+                          inCode << ": " << start << endl;
+                          } 
+                          statement SEMICOLON statements elses ENDIF 
                           {
-                            inCode << ": " << label_vector.back() << endl;
-                            label_vector.pop_back();             
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
+                          inCode << ": " << label_vector.back() << endl;
+                          label_vector.pop_back();             
+                          outCode << inCode.rdbuf();
+                          inCode.clear();
+                          inCode.str(" ");
                           }
-                          |
-                          IF bool_expr THEN
+                          ;
+
+elses:                    /*epsilon*/
+                          {}
+                          | ELSE 
                           {
-                            string start = makeLabel();
-                            string endif = makeLabel();
-                            label_vector.push_back(endif); 
-                            inCode << "?:= " << start << ", " << const_cast<char*>($2.name) << endl;
-                            inCode << ":= " << endif << endl;
-                            inCode << ": " << start << endl;
-                          }
-                          statements ELSE
-                          {
-                            string label = makeLabel(); 
-                            inCode << ":= " << label << endl;
-                            inCode << ": " << label_vector.back() << endl;
-                            label_vector.pop_back();
-                            label_vector.push_back(label);
-                          }
-                          statements ENDIF
-                          {
-                            inCode << ": " << label_vector.back() << endl;
-                            label_vector.pop_back();             
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
-                          }
+                              string label = makeLabel(); 
+                              inCode << ":= " << label << endl;
+                              inCode << ": " << label_vector.back() << endl;
+                              label_vector.pop_back();
+                              label_vector.push_back(label);
+                          } statement SEMICOLON statements
                           ;
 
 swhile:                   WHILE bool_expr BEGINLOOP
@@ -631,6 +612,7 @@ bool_expr:                relation_and_expr bool_exprs
                             while(!ors.empty())
                             {
                               string name = ors.top();
+                              ors.pop();
                               inCode << "|| " << out << ", " << out << ", " << name << endl; 
                             }
                           }
@@ -655,6 +637,7 @@ relation_and_expr:        relation_expr relation_and_exprs
                             while(!ands.empty())
                             {
                               string name = ands.top();
+                              ands.pop();
                               inCode << "&& " << out << ", " << out << ", " << name << endl; 
                             }
                           }
@@ -669,18 +652,16 @@ relation_and_exprs:       AND relation_expr relation_and_exprs
                           {}
                           ;
 
-relation_expr:            nots relation_expr_ending
+relation_expr:            NOT relation_expr_ending
                           {
-                            if(($1 != NULL) && ($1[0] == '\0')) //if 'nots' is empty
-                            {
-                              strcpy($$.name, $1);
-                            }
-                            else
-                            {
-                              string out = makeTemp();
-                              strcpy($$.name, out.c_str());
-                              inCode << $1 << "" << out << const_cast<char*>($2.name) << endl;
-                            }
+                            string out = makeTemp();
+                            strcpy($$.name, out.c_str());
+                            inCode << "! " << out << ", " << const_cast<char*>($2.name) << endl;
+                          }
+                          |
+                          relation_expr_ending
+                          {
+                            strcpy($$.name, $1.name);
                           }
                           ;
 
@@ -712,13 +693,6 @@ relation_expr_ending:     expression comp expression
                           {
                             strcpy($$.name, $2.name);
                           }
-                          ;
-
-nots:                     NOT
-                          {$$ = const_cast<char*>("! ");}
-                          |
-                          /*epsilon*/
-                          {$$ = const_cast<char*>("");}
                           ;
 
 comp:                     EQ
@@ -984,7 +958,6 @@ ident:                    IDENT
                             char chars[100];
                             sprintf(chars, "%d", $1);
                             strcpy($$.name, $1);
-                            strcpy($$.name, chars);
                             strcpy($$.ind, $$.name);
                           }
                           ;

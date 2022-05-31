@@ -7,4 +7,4 @@ compile: miniL.lex miniL.y
 	g++ -o miniL y.tab.c lex.yy.c -lfl
 
 clean:
-	rm -f lex.yy.c y.tab.* y.output *.o miniL miniL-lex.c miniL-parser.c miniL-parser.c miniL-parser.dot miniL-parser.h miniL-parser.output
+	rm -f lex.yy.c y.tab.* y.output *.o miniL miniL-lex.c miniL-parser.c miniL-parser.c miniL-parser.dot miniL-parser.h miniL-parser.output out.mil
