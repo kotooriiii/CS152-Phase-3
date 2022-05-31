@@ -273,8 +273,7 @@ stack<string> identStack;
 stack<string> expStack; 
 vector<string> label_vector;
 stack<string> paramStack;
-stringstream inCode;
-ostringstream outCode;
+ostringstream intermediateCodeStream;
 
 stack<string> ands;
 stack<string> ors;
@@ -359,7 +358,7 @@ functions_spec:           functions
 
 function:                 FUNCTION ident 
                           {
-                            inCode << "func " << $2.name << endl;
+                            intermediateCodeStream << "func " << $2.name << endl;
                             string name = string($2.name);
                             add_function_to_symbol_table(name);
                           }
@@ -368,13 +367,13 @@ function:                 FUNCTION ident
                             paramCount = 0;
                             while (!paramStack.empty())
                             {
-                              inCode << "= " << paramStack.top() << ", " << "$" << paramCount++ << endl;
+                              intermediateCodeStream << "= " << paramStack.top() << ", " << "$" << paramCount++ << endl;
                               paramStack.pop();
                             }
                           }
                           END_PARAMS BEGIN_LOCALS declarations END_LOCALS BEGIN_BODY statements END_BODY
                           {
-                            outCode << "endfunc\n";
+                            intermediateCodeStream << "endfunc\n";
                         
                             while (!paramStack.empty()) 
                             {
@@ -406,7 +405,7 @@ declaration:              identifiers COLON INTEGER
                               string name = identStack.top();
                               SYMBOL_TYPE type = INT;
                               add_variable_to_symbol_table(name, 0, 0, type);
-                              inCode << ". " << name << endl;
+                              intermediateCodeStream << ". " << name << endl;
                               identStack.pop(); 
                             }
                           }
@@ -422,7 +421,7 @@ declaration:              identifiers COLON INTEGER
                               {
                                 yyerror("Error: Size of array should be a positive integer.");
                               }
-                              inCode << ".[] " << name << ", " << $5.value << endl;
+                              intermediateCodeStream << ".[] " << name << ", " << $5.value << endl;
                               identStack.pop(); 
                             } 
                           }
@@ -434,7 +433,7 @@ declaration:              identifiers COLON INTEGER
                               string name = identStack.top();
                               SYMBOL_TYPE type = IENUM;
                               add_variable_to_symbol_table(name, 0, 0, type);
-                              inCode << ". " << name << endl;
+                              intermediateCodeStream << ". " << name << endl;
                               identStack.pop();
                             } 
                           }
@@ -445,7 +444,7 @@ declaration:              identifiers COLON INTEGER
                               string name = identStack.top();
                               SYMBOL_TYPE type = INT;
                               add_variable_to_symbol_table(name, 0, 0, type);
-                              inCode << ". " << name << endl;
+                              intermediateCodeStream << ". " << name << endl;
                               identStack.pop();
                             }   
                           }
@@ -494,15 +493,12 @@ svar:                     var ASSIGN expression
                           {
                             if($1.type == ARR)
                             {
-                              inCode << "[]= " << const_cast<char*>($1.name) << ", " << const_cast<char*>($1.ind) << ", " << const_cast<char*>($3.name) << endl;
+                              intermediateCodeStream << "[]= " << const_cast<char*>($1.name) << ", " << const_cast<char*>($1.ind) << ", " << const_cast<char*>($3.name) << endl;
                             }
                             else 
                             {
-                              inCode << "= " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
-                            }
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");	
+                              intermediateCodeStream << "= " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            }	
                           }
                           ;
 
@@ -511,17 +507,14 @@ sif:	                    IF bool_expr THEN
                           string start = makeLabel();
                           string endif = makeLabel();
                           label_vector.push_back(endif); 
-                          inCode << "?:= " << start << ", " << const_cast<char*>($2.name) << endl;
-                          inCode << ":= " << endif << endl;
-                          inCode << ": " << start << endl;
+                          intermediateCodeStream << "?:= " << start << ", " << const_cast<char*>($2.name) << endl;
+                          intermediateCodeStream << ":= " << endif << endl;
+                          intermediateCodeStream << ": " << start << endl;
                           } 
                           statement SEMICOLON statements elses ENDIF 
                           {
-                          inCode << ": " << label_vector.back() << endl;
+                          intermediateCodeStream << ": " << label_vector.back() << endl;
                           label_vector.pop_back();             
-                          outCode << inCode.rdbuf();
-                          inCode.clear();
-                          inCode.str(" ");
                           }
                           ;
 
@@ -530,8 +523,8 @@ elses:                    /*epsilon*/
                           | ELSE 
                           {
                               string label = makeLabel(); 
-                              inCode << ":= " << label << endl;
-                              inCode << ": " << label_vector.back() << endl;
+                              intermediateCodeStream << ":= " << label << endl;
+                              intermediateCodeStream << ": " << label_vector.back() << endl;
                               label_vector.pop_back();
                               label_vector.push_back(label);
                           } statement SEMICOLON statements
@@ -542,30 +535,21 @@ swhile:                   WHILE bool_expr BEGINLOOP
                             string condition = makeLabel();
                             string endlabel = makeLabel();
                             string start = makeLabel();
-                            outCode << ": " << start << endl;
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
-                            inCode << "?:= " << condition << ", " << const_cast<char*>($2.name) << endl;
-                            inCode << ":= " << endlabel << endl;
-                            inCode << ": " << condition << endl;
+                            intermediateCodeStream << ": " << start << endl;
+                            intermediateCodeStream << "?:= " << condition << ", " << const_cast<char*>($2.name) << endl;
+                            intermediateCodeStream << ":= " << endlabel << endl;
+                            intermediateCodeStream << ": " << condition << endl;
                             label_vector.push_back(start);
                             label_vector.push_back(endlabel);                            
                           }
                           statements ENDLOOP
                           {
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
                             string endlabel = label_vector.back();
                             label_vector.pop_back();
                             string start = label_vector.back();
                             label_vector.pop_back();
-                            inCode << ":= " << start << endl;
-                            inCode << ": " << endlabel << endl;
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
+                            intermediateCodeStream << ":= " << start << endl;
+                            intermediateCodeStream << ": " << endlabel << endl;
                           }
                           ;
 
@@ -573,19 +557,13 @@ sdo:                      DO BEGINLOOP
                           {
                             string start = makeLabel();
                             label_vector.push_back(start);
-                            outCode << ": " << start << endl;
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");
+                            intermediateCodeStream << ": " << start << endl;
                           }
                           statements ENDLOOP WHILE bool_expr
                           {
                             string start = label_vector.back();
-                            inCode << "?:= " << start << ", " << const_cast<char*>($7.name) << endl;
-                            label_vector.pop_back(); 
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");                            
+                            intermediateCodeStream << "?:= " << start << ", " << const_cast<char*>($7.name) << endl;
+                            label_vector.pop_back();                          
                           }
                           ;
 
@@ -595,17 +573,14 @@ sread:                    READ var vars
                             while (!varStack.empty()) 
                             {
                                 if ($2.type == 0) {
-                                    inCode << ".< " << varStack.top() << endl;
+                                    intermediateCodeStream << ".< " << varStack.top() << endl;
                                     varStack.pop();
                                 }
                                 else {
-                                    inCode << ".[]< " << varStack.top() << ", "  <<  const_cast<char*>($2.ind) << endl;
+                                    intermediateCodeStream << ".[]< " << varStack.top() << ", "  <<  const_cast<char*>($2.ind) << endl;
                                     varStack.pop();
                                 }
-                            }
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");                            
+                            }                       
                           }
                           ;
 
@@ -623,22 +598,19 @@ swrite:                   WRITE var vars
                             {
                               if ($2.type == 0) 
                               {
-                                inCode << ".> " << varStack.top() << endl;
+                                intermediateCodeStream << ".> " << varStack.top() << endl;
                                 varStack.pop();
                               }
                               else 
                               {
                                 string out = makeTemp();
                                 strcpy($$.name, out.c_str());
-                                inCode << ". " << out << endl;
-                                inCode << "=[] " << out << ", " << const_cast<char*>($2.name) << ", " << const_cast<char*>($2.ind) << endl;
-                                inCode << ".[]> " << varStack.top() << ", "  <<  const_cast<char*>($2.ind) << endl;
+                                intermediateCodeStream << ". " << out << endl;
+                                intermediateCodeStream << "=[] " << out << ", " << const_cast<char*>($2.name) << ", " << const_cast<char*>($2.ind) << endl;
+                                intermediateCodeStream << ".[]> " << varStack.top() << ", "  <<  const_cast<char*>($2.ind) << endl;
                                 varStack.pop();
                               }
-                            }
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");                            
+                            }                         
                           }
                           ;
 
@@ -646,10 +618,7 @@ scontinue:                CONTINUE
                           {
                             if (!label_vector.empty())
                             {
-                              inCode << ":= " << label_vector.back() << endl;
-                              outCode << inCode.rdbuf();
-                              inCode.clear();
-                              inCode.str(" ");
+                              intermediateCodeStream << ":= " << label_vector.back() << endl;
                             }
                             else 
                             {
@@ -662,10 +631,7 @@ sreturn:                  RETURN expression
                           {
                             $$.value = $2.value;
                             strcpy($$.name, $2.name);
-                            inCode << "ret " << const_cast<char*>($2.name) << endl;
-                            outCode << inCode.rdbuf();
-                            inCode.clear();
-                            inCode.str(" ");                            
+                            intermediateCodeStream << "ret " << const_cast<char*>($2.name) << endl;                         
                           }
                           ;
 
@@ -673,14 +639,14 @@ bool_expr:                relation_and_expr bool_exprs
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << ". " << out << endl;
-                            inCode << "= " << out << ", " << $1.name << endl;;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "= " << out << ", " << $1.name << endl;;
 
                             while(!ors.empty())
                             {
                               string name = ors.top();
                               ors.pop();
-                              inCode << "|| " << out << ", " << out << ", " << name << endl; 
+                              intermediateCodeStream << "|| " << out << ", " << out << ", " << name << endl; 
                             }
                           }
                           ;
@@ -698,14 +664,14 @@ relation_and_expr:        relation_expr relation_and_exprs
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << ". " << out << endl;
-                            inCode << "= " << out << ", " << $1.name << endl;;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "= " << out << ", " << $1.name << endl;;
 
                             while(!ands.empty())
                             {
                               string name = ands.top();
                               ands.pop();
-                              inCode << "&& " << out << ", " << out << ", " << name << endl; 
+                              intermediateCodeStream << "&& " << out << ", " << out << ", " << name << endl; 
                             }
                           }
                           ;
@@ -723,7 +689,7 @@ relation_expr:            NOT relation_expr_ending
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << "! " << out << ", " << const_cast<char*>($2.name) << endl;
+                            intermediateCodeStream << "! " << out << ", " << const_cast<char*>($2.name) << endl;
                           }
                           |
                           relation_expr_ending
@@ -736,24 +702,24 @@ relation_expr_ending:     expression comp expression
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << ". " << out << endl;
-                            inCode << $2 << " " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;                                            
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << $2 << " " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;                                            
                           }
                           |
                           TRUE
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << ". " << out << endl;
-                            inCode << "= " << out << ", " << "1" << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "= " << out << ", " << "1" << endl;
                           }
                           |
                           FALSE
                           {
                             string out = makeTemp();
                             strcpy($$.name, out.c_str());
-                            inCode << ". " << out << endl;
-                            inCode << "= " << out << ", " << "0" << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "= " << out << ", " << "0" << endl;
                           }
                           |
                           L_PAREN bool_expr R_PAREN
@@ -790,16 +756,16 @@ expression:               mul_exp
                           expression ADD mul_exp 
                           {
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "+ " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "+ " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
                             strcpy($$.name, out.c_str());
                           }
                           |
                           expression SUB mul_exp 
                           {
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "- " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "- " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
                             strcpy($$.name, out.c_str());
                           }
                           ;
@@ -813,24 +779,24 @@ mul_exp:                  term
                           mul_exp MULT term 
                           {
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "* " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "* " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
                             strcpy($$.name, out.c_str());
                           }
                           |
                           mul_exp DIV term 
                           {
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "/ " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "/ " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
                             strcpy($$.name, out.c_str());
                           }
                           |
                           mul_exp MOD term
                           {
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "% " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "% " << out << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($3.name) << endl;
                             strcpy($$.name, out.c_str());
                           }
                           ;
@@ -848,8 +814,8 @@ term:                     var
                             {
                               string out = makeTemp();
                               strcpy($$.name, out.c_str());
-                              inCode << ". " <<  const_cast<char*>($$.name) << endl;
-                              inCode << "=[] " << const_cast<char*>($$.name) << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($1.ind) << endl;
+                              intermediateCodeStream << ". " <<  const_cast<char*>($$.name) << endl;
+                              intermediateCodeStream << "=[] " << const_cast<char*>($$.name) << ", " << const_cast<char*>($1.name) << ", " << const_cast<char*>($1.ind) << endl;
                             }
                           }
                           |
@@ -863,35 +829,35 @@ term:                     var
                               $$.type = 0;
 
                               string minus = makeTemp();
-                              inCode << ". " << minus << endl;
-                              inCode << "= " << minus << ", " << "0" << endl;
+                              intermediateCodeStream << ". " << minus << endl;
+                              intermediateCodeStream << "= " << minus << ", " << "0" << endl;
 
                               string num = makeTemp();
-                              inCode << ". " << num << endl;
-                              inCode << "= " << num << ", " << $2.name << endl;
+                              intermediateCodeStream << ". " << num << endl;
+                              intermediateCodeStream << "= " << num << ", " << $2.name << endl;
 
                               string out = makeTemp();
                               strcpy($$.name , out.c_str());
-                              inCode << ". " << const_cast<char*>($$.name) << endl;
-                              inCode << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
+                              intermediateCodeStream << ". " << const_cast<char*>($$.name) << endl;
+                              intermediateCodeStream << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
                             }
                             else if ($2.type == 1) 
                             {
 
                               string minus = makeTemp();
-                              inCode << ". " << minus << endl;
-                              inCode << "= " << minus << ", " << "0" << endl;
+                              intermediateCodeStream << ". " << minus << endl;
+                              intermediateCodeStream << "= " << minus << ", " << "0" << endl;
 
                               string num = makeTemp();
-                              inCode << ". " <<  num << endl;
-                              inCode << "=[] " << num << ", " << const_cast<char*>($2.name) << ", " << const_cast<char*>($2.ind) << endl;
+                              intermediateCodeStream << ". " <<  num << endl;
+                              intermediateCodeStream << "=[] " << num << ", " << const_cast<char*>($2.name) << ", " << const_cast<char*>($2.ind) << endl;
 
                               string out = makeTemp();
                               strcpy($$.name , out.c_str());
                               strcpy($$.ind, $$.name);
                               $$.type = 0;
-                              inCode << ". " << const_cast<char*>($$.name) << endl;
-                              inCode << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
+                              intermediateCodeStream << ". " << const_cast<char*>($$.name) << endl;
+                              intermediateCodeStream << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
                             }                       
                           }
                           |
@@ -911,17 +877,17 @@ term:                     var
                             strcpy($$.ind, $2.ind);  
 
                             string minus = makeTemp();
-                            inCode << ". " << minus << endl;
-                            inCode << "= " << minus << ", " << "0" << endl;
+                            intermediateCodeStream << ". " << minus << endl;
+                            intermediateCodeStream << "= " << minus << ", " << "0" << endl;
 
                             string num = makeTemp();
-                            inCode << ". " << num << endl;
-                            inCode << "= " << num << ", " << $2.value << endl;
+                            intermediateCodeStream << ". " << num << endl;
+                            intermediateCodeStream << "= " << num << ", " << $2.value << endl;
 
                             string out = makeTemp();
                             strcpy($$.name , out.c_str());
-                            inCode << ". " << const_cast<char*>($$.name) << endl;
-                            inCode << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
+                            intermediateCodeStream << ". " << const_cast<char*>($$.name) << endl;
+                            intermediateCodeStream << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
                           }
                           |
                           L_PAREN expression R_PAREN
@@ -932,17 +898,17 @@ term:                     var
                           SUB L_PAREN expression R_PAREN
                           {
                             string minus = makeTemp();
-                            inCode << ". " << minus << endl;
-                            inCode << "= " << minus << ", " << "0" << endl;
+                            intermediateCodeStream << ". " << minus << endl;
+                            intermediateCodeStream << "= " << minus << ", " << "0" << endl;
 
                             string num = makeTemp();
-                            inCode << ". " << num << endl;
-                            inCode << "= " << num << ", " << $3.name << endl;
+                            intermediateCodeStream << ". " << num << endl;
+                            intermediateCodeStream << "= " << num << ", " << $3.name << endl;
 
                             string out = makeTemp();
                             strcpy($$.name , out.c_str());
-                            inCode << ". " << const_cast<char*>($$.name) << endl;
-                            inCode << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
+                            intermediateCodeStream << ". " << const_cast<char*>($$.name) << endl;
+                            intermediateCodeStream << "- " << const_cast<char*>($$.name) << ", " << minus << ", " << num << endl;  
                           }
                           |
                           ident L_PAREN expressions R_PAREN
@@ -951,12 +917,12 @@ term:                     var
                             checkFunctionExists(name);
                             while (!expStack.empty())
                             {
-                              inCode << "param " << expStack.top() << endl;
+                              intermediateCodeStream << "param " << expStack.top() << endl;
                               expStack.pop();
                             }
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "call " << const_cast<char*>($1.name) << ", " << out << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "call " << const_cast<char*>($1.name) << ", " << out << endl;
                             strcpy($$.name, out.c_str());
                           }
                           |
@@ -965,8 +931,8 @@ term:                     var
                             string name = string($1.name);
                             checkFunctionExists(name);
                             string out = makeTemp();
-                            inCode << ". " << out << endl;
-                            inCode << "call " << const_cast<char*>($1.name) << ", " << out << endl;
+                            intermediateCodeStream << ". " << out << endl;
+                            intermediateCodeStream << "call " << const_cast<char*>($1.name) << ", " << out << endl;
                             strcpy($$.name, out.c_str());
                           }
                           ;
@@ -994,8 +960,8 @@ var:                      ident L_SQUARE_BRACKET expression R_SQUARE_BRACKET
                                 $$.type = 1;
                                 strcpy($$.ind, out.c_str());
                                 strcpy($$.name, $1.name);
-                                inCode << ". " << out << endl; 
-                                inCode << "=[] " << out << ", " << const_cast<char*>($3.name) << ", " << const_cast<char*>($3.ind) << endl;
+                                intermediateCodeStream << ". " << out << endl; 
+                                intermediateCodeStream << "=[] " << out << ", " << const_cast<char*>($3.name) << ", " << const_cast<char*>($3.ind) << endl;
                               }
                               else
                               {
@@ -1083,7 +1049,7 @@ int main(int argc, char ** argv)
     printf("The file \"%s\" was able to be compiled into out.mil successfully.\n", argv[1]);
     ofstream file;
     file.open("out.mil");
-    file << outCode.str();
+    file << intermediateCodeStream.str();
     file.close();
   }
   else
