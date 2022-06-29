@@ -1,4 +1,4 @@
-# Custom Made Compiler for MINI L code
+# Custom
 
 To use this project, use 'make clean' to remove all unnecessary stale data.
 
