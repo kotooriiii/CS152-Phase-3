@@ -1,4 +1,4 @@
-# CS152-Phase-3
+# Custom Made Compiler for MINI-L code
 
 To use this project, use 'make clean' to remove all unnecessary stale data.
 
